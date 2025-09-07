@@ -82,11 +82,12 @@ void kernel_entry(void)
     plogk("x86/PAT: Configuration [0-7]: %s\n", get_pat_config().pat_str);
     plogk("dmi: %s %s, BIOS %s %s\n", smbios_sys_manufacturer(), smbios_sys_product_name(), smbios_bios_version(), smbios_bios_release_date());
 
-    init_gdt();                   // Initialize global descriptors
-    init_idt();                   // Initialize interrupt descriptor
-    isr_registe_handle();         // Register ISR interrupt processing
-    acpi_init();                  // Initialize ACPI
-    smp_init();                   // Initialize SMP
+    init_gdt();           // Initialize global descriptors
+    init_idt();           // Initialize interrupt descriptor
+    isr_registe_handle(); // Register ISR interrupt processing
+    acpi_init();          // Initialize ACPI
+    smp_init();           // Initialize SMP
+    video_heaped_init();
     print_memory_map();           // Print memory map information
     log_buffer_print(&frame_log); // Print frame log
     pci_init();                   // Initialize PCI
