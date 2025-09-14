@@ -12,14 +12,14 @@
 #include "acpi.h"
 #include "cmdline.h"
 #include "common.h"
-#include "cpu.h"
+#include "cpuid.h"
 #include "debug.h"
+#include "eis.h"
 #include "frame.h"
 #include "gdt.h"
 #include "heap.h"
 #include "hhdm.h"
 #include "ide.h"
-#include "idt.h"
 #include "interrupt.h"
 #include "limine_module.h"
 #include "page.h"
@@ -28,6 +28,7 @@
 #include "pci.h"
 #include "printk.h"
 #include "scheduler.h"
+#include "ps2.h"
 #include "serial.h"
 #include "smbios.h"
 #include "smp.h"
@@ -55,9 +56,13 @@ void executable_entry(void)
 /* Kernel entry */
 void kernel_entry(void)
 {
-    video_init(); // Initialize Video
+    init_fpu(); // Initialize FPU/MMX
+    init_sse(); // Initialize SSE/SSE2
+    init_avx(); // Initialize AVX/AVX2
+
     page_init();  // Initialize memory page
     init_heap();  // Initialize the memory heap
+    video_init(); // Initialize Video
 
     video_info_t fbinfo = video_get_info();
 
@@ -83,7 +88,6 @@ void kernel_entry(void)
     init_idt();           // Initialize interrupt descriptor
     isr_registe_handle(); // Register ISR interrupt processing
     acpi_init();          // Initialize ACPI
-    smp_init();           // Initialize SMP
     print_memory_map();   // Print memory map information
     init_frame();         // Initialize memory frame
     pci_init();           // Initialize PCI
@@ -91,6 +95,8 @@ void kernel_entry(void)
     init_ide();           // Initialize ATA/ATAPI driver
     init_serial();        // Initialize the serial port
     init_parallel();      // Initialize the parallel port
+    init_ps2();           // Initialize PS/2 controller
+    smp_init();           // Initialize SMP
     disable_intr();
     init_task();
     enable_scheduler();

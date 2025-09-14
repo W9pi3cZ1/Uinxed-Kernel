@@ -15,7 +15,7 @@
 #include "debug.h"
 #include "frame.h"
 #include "hhdm.h"
-#include "idt.h"
+#include "interrupt.h"
 #include "printk.h"
 #include "stdlib.h"
 #include "string.h"
@@ -24,7 +24,7 @@ page_directory_t  kernel_page_dir;
 page_directory_t *current_directory = 0;
 
 /* Page fault handling */
-__attribute__((interrupt)) void page_fault_handle(interrupt_frame_t *frame, uint64_t error_code)
+INTERRUPT_BEGIN void page_fault_handle(interrupt_frame_t *frame, uint64_t error_code)
 {
     (void)frame;
     disable_intr();
@@ -32,23 +32,27 @@ __attribute__((interrupt)) void page_fault_handle(interrupt_frame_t *frame, uint
     uint64_t faulting_address;
     __asm__ volatile("mov %%cr2, %0" : "=r"(faulting_address));
 
-    int      present  = !(error_code & 0x1); // Page does not exist
-    uint64_t rw       = error_code & 0x2;    // Read-only page is written
-    uint64_t us       = error_code & 0x4;    // User mode writes to kernel page
-    uint64_t reserved = error_code & 0x8;    // Write CPU reserved bits
-    uint64_t id       = error_code & 0x10;   // Caused by instruction fetch
+    int         present  = !(error_code & 0x1); // Page does not exist
+    uint64_t    rw       = error_code & 0x2;    // Read-only page is written
+    uint64_t    us       = error_code & 0x4;    // User mode writes to kernel page
+    uint64_t    reserved = error_code & 0x8;    // Write CPU reserved bits
+    uint64_t    id       = error_code & 0x10;   // Caused by instruction fetch
+    const char *pf_msg   = "Unknown";
 
     if (present)
-        panic("PAGE_FAULT-Present-Address: 0x%016llx", faulting_address);
+        pf_msg = "Present";
     else if (rw)
-        panic("PAGE_FAULT-ReadOnly-Address: 0x%016llx", faulting_address);
+        pf_msg = "ReadOnly";
     else if (us)
-        panic("PAGE_FAULT-UserMode-Address: 0x%016llx", faulting_address);
+        pf_msg = "UserMode";
     else if (reserved)
-        panic("PAGE_FAULT-Reserved-Address: 0x%016llx", faulting_address);
+        pf_msg = "Reserved";
     else if (id)
-        panic("PAGE_FAULT-DecodeAddress-Address: 0x%016llx", faulting_address);
+        pf_msg = "DecodeAddress";
+
+    panic("PAGE_FAULT-%s-Address: 0x%016llx", pf_msg, faulting_address);
 }
+INTERRUPT_END
 
 /* Determine whether the page table entry maps a huge page */
 static int is_huge_page(page_table_entry_t *entry)
@@ -91,16 +95,16 @@ page_directory_t *get_current_directory(void)
 /* Iteratively copy memory page tables using an explicit stack */
 void copy_page_table_iterative(page_table_t *source_table, page_table_t *new_table, int level)
 {
-    struct StackFrame {
+    struct stack_frame {
             page_table_t *source_table;
             page_table_t *new_table;
             int           level;
             int           i;
     } stack[32];
     int top      = -1;
-    stack[++top] = (struct StackFrame) {source_table, new_table, level, 0};
+    stack[++top] = (struct stack_frame) {source_table, new_table, level, 0};
     while (top >= 0) {
-        struct StackFrame frame = stack[top--];
+        struct stack_frame frame = stack[top--];
         if (frame.level == 0) {
             for (int j = 0; j < 512; j++) frame.new_table->entries[j].value = frame.source_table->entries[j].value;
             continue;
@@ -116,7 +120,7 @@ void copy_page_table_iterative(page_table_t *source_table, page_table_t *new_tab
             frame.new_table->entries[i].value = (uint64_t)new_next_level | (frame.source_table->entries[i].value & 0xfff);
             frame.i++;
             stack[++top] = frame;
-            stack[++top] = (struct StackFrame) {
+            stack[++top] = (struct stack_frame) {
                 .source_table = source_next_level,
                 .new_table    = new_next_level,
                 .level        = frame.level - 1,
@@ -131,15 +135,15 @@ void copy_page_table_iterative(page_table_t *source_table, page_table_t *new_tab
 void free_page_table_iterative(page_table_t *table, int level)
 {
     void *phys_addr;
-    struct StackFrame {
+    struct stack_frame {
             page_table_t *table;
             int           level;
             int           i;
     } stack[32];
     int top      = -1;
-    stack[++top] = (struct StackFrame) {table, level, 0};
+    stack[++top] = (struct stack_frame) {table, level, 0};
     while (top >= 0) {
-        struct StackFrame frame = stack[top--];
+        struct stack_frame frame = stack[top--];
         while (frame.i < 512) {
             page_table_entry_t *entry = &frame.table->entries[frame.i];
             if (entry->value == 0 || is_huge_page(entry)) {
@@ -154,8 +158,8 @@ void free_page_table_iterative(page_table_t *table, int level)
                 continue;
             }
             page_table_t *child_table = (page_table_t *)phys_to_virt(entry->value & 0x000fffffffff000);
-            stack[++top]              = (struct StackFrame) {frame.table, frame.level, frame.i + 1};
-            stack[++top]              = (struct StackFrame) {child_table, frame.level - 1, 0};
+            stack[++top]              = (struct stack_frame) {frame.table, frame.level, frame.i + 1};
+            stack[++top]              = (struct stack_frame) {child_table, frame.level - 1, 0};
             break;
         }
         if (frame.i >= 512) {

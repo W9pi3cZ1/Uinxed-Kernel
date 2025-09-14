@@ -18,8 +18,8 @@
 
 #define KERNEL_STACK_SIZE 0x10000 // 64 KiB
 
-#ifndef MAX_CPU_COUNT
-#    define MAX_CPU_COUNT 0
+#ifndef CPU_MAX_COUNT
+#    define CPU_MAX_COUNT 0
 #endif
 
 typedef uint8_t kernel_stack_t[KERNEL_STACK_SIZE];

@@ -27,12 +27,22 @@ endif
 
 ifeq ($(CONFIG_KERNEL_LOG), y)
   C_CONFIG += -DKERNEL_LOG=1
-else
-  C_CONFIG += -DKERNEL_LOG=0
 endif
 
 ifneq ($(CONFIG_MAX_CPU_COUNT),)
   C_CONFIG += -DMAX_CPU_COUNT=$(CONFIG_MAX_CPU_COUNT)
+endif
+
+ifeq ($(CONFIG_CPU_FEATURE_FPU), y)
+  C_CONFIG += -DCPU_FEATURE_FPU=1
+endif
+
+ifeq ($(CONFIG_CPU_FEATURE_SSE), y)
+  C_CONFIG += -DCPU_FEATURE_SSE=1
+endif
+
+ifeq ($(CONFIG_CPU_FEATURE_AVX), y)
+  C_CONFIG += -DCPU_FEATURE_AVX=1
 endif
 
 ifneq ($(CONFIG_TTY_DEFAULT_DEV),)
@@ -66,15 +76,14 @@ PWD            := $(shell pwd)
 QEMU           := qemu-system-x86_64
 QEMU_FLAGS     := -machine q35 -bios assets/ovmf-code.fd 
 QEMU_KVM	   := --enable-kvm
+QEMU_SMP	   := 2
 
 CHECKS         := -quiet -checks=-*,clang-analyzer-*,bugprone-*,cert-*,misc-*,performance-*,portability-*,-misc-include-cleaner,-clang-analyzer-security.insecureAPI.*
 
 # If you want to get more details of `dump_stack`, you need to replace `-O3` with `-O0` or '-Os'.
 # `-fno-optimize-sibling-calls` is for `dump_stack` to work properly.
-C_FLAGS        := -Wall -Wextra -O3 -g3 -m64 -fpie -ffreestanding -fno-optimize-sibling-calls -fno-stack-protector -fno-omit-frame-pointer \
-                  -mno-red-zone -mno-80387 -mno-mmx -mno-sse -mno-sse2 -msoft-float -I include -MMD
+C_FLAGS        := -Wall -Wextra -O3 -g3 -m64 -fpie -ffreestanding -fno-optimize-sibling-calls -fno-stack-protector -fno-omit-frame-pointer -mstackrealign -mno-red-zone -I include -MMD
 LD_FLAGS       := -nostdlib -pie -T assets/linker.ld -m elf_x86_64
-AS_FLAGS       := -g --64
 
 all: info Uinxed-x64.iso
 
@@ -100,6 +109,9 @@ info:
 
 UxImage: $(OBJS) $(LIBS)
 	$(V)$(LD) $(LD_FLAGS) -o $@ $^
+
+kerneldump.log: UxImage
+	$(V)objdump -d UxImage > kerneldump.log &
 
 Uinxed-x64.iso: UxImage
 	$(Q)echo
@@ -130,12 +142,14 @@ run: Uinxed-x64.iso
 	$(QEMU) $(QEMU_FLAGS) $(QEMU_KVM) -cdrom $<
 	$(Q)echo
 
-run_db: Uinxed-x64.iso
+run_db: Uinxed-x64.iso kerneldump.log
 	qemu-system-x86_64 $(QEMU_FLAGS) -no-reboot -d in_asm,int -D qemu.log -cdrom $<
 
-run_gdb: Uinxed-x64.iso
+run_gdb: Uinxed-x64.iso kerneldump.log
 	qemu-system-x86_64 $(QEMU_FLAGS) -no-reboot -d in_asm,int -D qemu.log -S -s -cdrom $<
 
+run_smp: Uinxed-x64.iso
+	qemu-system-x86_64 $(QEMU_FLAGS) $(QEMU_KVM) -smp $(QEMU_SMP) -cdrom $<
 
 clean:
 	$(Q)$(RM) $(OBJS) $(DEPS) UxImage Uinxed-x64.iso

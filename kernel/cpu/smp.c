@@ -14,8 +14,9 @@
 #include "apic.h"
 #include "common.h"
 #include "debug.h"
+#include "eis.h"
 #include "gdt.h"
-#include "idt.h"
+#include "interrupt.h"
 #include "limine.h"
 #include "page.h"
 #include "printk.h"
@@ -34,7 +35,7 @@ static volatile uint64_t ap_ready_count = 0;
 spinlock_t               ap_start_lock  = {0};
 
 /* Rescheduling Requests */
-__attribute__((interrupt)) static void ipi_reschedule_handler(interrupt_frame_t *frame)
+INTERRUPT_BEGIN static void ipi_reschedule_handler(interrupt_frame_t *frame)
 {
     (void)frame;
     disable_intr();
@@ -42,9 +43,10 @@ __attribute__((interrupt)) static void ipi_reschedule_handler(interrupt_frame_t 
     send_eoi();
     enable_intr();
 }
+INTERRUPT_END
 
 /* Downtime Request */
-__attribute__((interrupt)) static void ipi_halt_handler(interrupt_frame_t *frame)
+INTERRUPT_BEGIN static void ipi_halt_handler(interrupt_frame_t *frame)
 {
     (void)frame;
     disable_intr();
@@ -52,9 +54,10 @@ __attribute__((interrupt)) static void ipi_halt_handler(interrupt_frame_t *frame
     send_eoi();
     enable_intr();
 }
+INTERRUPT_END
 
 /* TLB flush request */
-__attribute__((interrupt)) static void ipi_tlb_shootdown_handler(interrupt_frame_t *frame)
+INTERRUPT_BEGIN static void ipi_tlb_shootdown_handler(interrupt_frame_t *frame)
 {
     (void)frame;
     disable_intr();
@@ -62,9 +65,10 @@ __attribute__((interrupt)) static void ipi_tlb_shootdown_handler(interrupt_frame
     send_eoi();
     enable_intr();
 }
+INTERRUPT_END
 
 /* Emergency Error Broadcast */
-__attribute__((interrupt)) static void ipi_panic_handler(interrupt_frame_t *frame)
+INTERRUPT_BEGIN static void ipi_panic_handler(interrupt_frame_t *frame)
 {
     (void)frame;
     disable_intr();
@@ -72,6 +76,7 @@ __attribute__((interrupt)) static void ipi_panic_handler(interrupt_frame_t *fram
     send_eoi();
     enable_intr();
 }
+INTERRUPT_END
 
 /* Send an IPI to all CPUs */
 void send_ipi_all(uint8_t vector)
@@ -156,6 +161,10 @@ void ap_init_gdt(cpu_processor_t *cpu)
 /* Multi-core boot entry */
 void ap_entry(struct limine_smp_info *info)
 {
+    init_fpu();
+    init_sse();
+    init_avx();
+
     pointer_cast_t cast;
     cast.val             = info->extra_argument;
     cpu_processor_t *cpu = (cpu_processor_t *)cast.ptr;
@@ -171,20 +180,20 @@ void ap_entry(struct limine_smp_info *info)
     /* Initializing the IDT */
     __asm__ volatile("lidt %0" ::"m"(idt_pointer) : "memory");
 
-    /* Clear the spurious interrupt */
-    lapic_write(LAPIC_REG_SPURIOUS, lapic_read(LAPIC_REG_SPURIOUS) | (1 << 8) | 0xFF);
+    /* Initializing Local APIC */
+    local_apic_init();
 
     spin_lock(&ap_start_lock);
     ap_ready_count++;
     spin_unlock(&ap_start_lock);
 
     /* TODO: Implement the scheduler loop */
-    enable_intr();
     enable_scheduler();
-    while (1) __asm__ volatile("hlt");
+    enable_intr();
+    while (1) { __asm__ volatile("hlt"); }
 
     /* Shouldn't reach here */
-    panic("AP %d scheduler exited.", cpu->id);
+    panic("AP %d entry exited.", cpu->id);
 }
 
 /* Initializing Symmetric Multi-Processing */
@@ -197,9 +206,11 @@ void smp_init(void)
         return;
     }
 
-    cpu_count = (!MAX_CPU_COUNT) ? smp->cpu_count : (smp->cpu_count > MAX_CPU_COUNT ? MAX_CPU_COUNT : smp->cpu_count);
-    cpus      = (cpu_processor_t *)malloc(sizeof(cpu_processor_t) * cpu_count);
+    cpu_count = (!CPU_MAX_COUNT) ? smp->cpu_count : (smp->cpu_count > CPU_MAX_COUNT ? CPU_MAX_COUNT : smp->cpu_count);
+    cpus      = (cpu_processor_t *)ALIGN_DOWN((uint64_t)malloc(sizeof(cpu_processor_t) * cpu_count), 16);
     plogk("smp: Found %d CPUs.\n", cpu_count);
+
+    init_scheduler();
 
     /* Init BootStrap Processor */
     for (uint32_t i = 0; i < cpu_count; i++) {

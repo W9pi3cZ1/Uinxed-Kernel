@@ -13,6 +13,7 @@
 #define INCLUDE_TTY_H_
 
 #include "stdint.h"
+#include "stdlib.h"
 
 #define MAX_ARGC    1024
 #define MAX_CMDLINE 256
@@ -40,6 +41,11 @@ typedef struct {
         tty_device_kind_t type;
         uint32_t          port;
 } tty_device_t;
+
+extern writer tty_writer;
+
+/* Directs character write operations to terminal output */
+uint8_t tty_writer_handler(writer *writer, char c);
 
 /* Parse boot_tty string to tty_device_t */
 tty_device_t parse_boot_tty_str(char *boot_tty_str);

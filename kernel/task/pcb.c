@@ -23,33 +23,43 @@ void kthread_exit(int status)
     for (;;) __asm__("hlt");
 }
 
-void kthread_entry(void **args)
+int kthread_entry(void **args)
 {
     int (*_start)(void *) = args[0];
-    int status = _start(args[1]);
+    if (_start == NULL)
+    {
+        panic("_start=NULL");
+    }
+    int status            = _start(args[1]);
     kthread_exit(status);
+    return 0;
 }
 
 pcb_t *kernel_thread(int (*_start)(void *arg), void *args, char *name)
 {
-    __asm__("cli");
     int s = get_scheduler();
     disable_scheduler();
-    pcb_t *new_task = (pcb_t *)calloc(1, KERNEL_ST_SZ);
-    if (new_task == NULL) { panic("No enough Memory\r\n"); }
+    pcb_t *new_task = (pcb_t *)calloc(1, sizeof(pcb_t) + STACK_SIZE);
+    if (new_task == NULL) { panic("No enough Memory to alloc for new tasks\r\n"); }
     memset(new_task, 0, sizeof(pcb_t));
     new_task->name  = (char *)malloc(strlen(name) * sizeof(char));
+    if (new_task->name == NULL)
+    {
+        panic("No enough Memory to alloc for new tasks\r\n");
+    }
+    
     new_task->level = 0;
     new_task->time  = 100;
 
     strcpy(new_task->name, name);
-    uint64_t *stack_top       = (uint64_t *)(new_task + (STACK_SIZE / sizeof(*new_task)));
+    uint64_t *stack_top       = (uint64_t *)(new_task + sizeof(pcb_t) + STACK_SIZE);
     *(--stack_top)            = (uint64_t)_start;
     new_task->context0.rflags = 0x202;
     new_task->context0.rip    = (uint64_t)_start;
-    new_task->context0.rsp    = (uint64_t)new_task + STACK_SIZE - sizeof(uint64_t) * 3; // 设置上下文
+    new_task->context0.rsp    = (uint64_t)stack_top - sizeof(uint64_t) * 3; // 设置上下文
     new_task->context0.rdi    = (uint64_t)args;
-    new_task->kernel_stack    = (new_task->context0.rsp &= ~0xF); // 栈16字节对齐
+    new_task->context0.rsp    = (new_task->context0.rsp & (~0xF)) - sizeof(uint64_t); // 栈16字节对齐
+    new_task->kernel_stack    = new_task->context0.rsp;
     new_task->user_stack      = new_task->kernel_stack;
     new_task->pid             = now_pid++;
     new_task->page_dir        = get_kernel_pagedir();
@@ -57,8 +67,6 @@ pcb_t *kernel_thread(int (*_start)(void *arg), void *args, char *name)
     new_task->state           = READY; //就绪态
     add_task(new_task);
     if (s == 1) { enable_scheduler(); }
-
-    __asm__("sti");
     return new_task;
 }
 
@@ -68,12 +76,11 @@ pcb_t *create_kernel_thread(int (*_start)(void *arg), void *args, char *name)
     if (!arg) { return NULL; }
     arg[0] = _start;
     arg[1] = args;
-    return kernel_thread((int (*)(void*))kthread_entry, arg, name);
+    return kernel_thread((int (*)(void *))kthread_entry, arg, name);
 }
 
 pcb_t *init_task()
 {
-    init_scheduler();
     idle_pcb           = (pcb_t **)calloc(sizeof(pcb_t *), get_cpu_count());
     current_tasks      = (pcb_t **)calloc(sizeof(pcb_t *), get_cpu_count());
     uint32_t cpu_count = get_cpu_count();
@@ -84,6 +91,6 @@ pcb_t *init_task()
     int *p   = (int *)malloc(sizeof(int));
     *p       = 114514;
     init_pcb = create_kernel_thread((int (*)(void *))init_kmain, p, "init");
-    plogk("idle stack: %p\tinit stack:%p\n\t", idle_pcb[0]->context0.rsp, init_pcb->context0.rsp);
+    plogk("idle stack: %p\tinit stack:%p\n", (void *)(uintptr_t)idle_pcb[0]->context0.rsp, (void *)(uintptr_t)init_pcb->context0.rsp);
     return init_pcb;
 }

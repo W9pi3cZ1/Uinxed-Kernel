@@ -1,4 +1,5 @@
 # Visual Studio Code
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -62,3 +63,5 @@ Uinxed-x64.iso
 compile_commands.json
 make.log
 *.bak
+kerneldump.log
+qemu.log
