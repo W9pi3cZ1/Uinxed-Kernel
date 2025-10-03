@@ -12,6 +12,7 @@
 #ifndef INCLUDE_PAGE_H_
 #define INCLUDE_PAGE_H_
 
+#include "stddef.h"
 #include "stdint.h"
 
 #define MSR_IA32_PAT 0x277
@@ -84,6 +85,9 @@ void page_map_range_to_random(page_directory_t *directory, uint64_t addr, uint64
 
 /* Get the PAT configuration */
 pat_config_t get_pat_config(void);
+
+/* Walk page tables to find a free virtual range */
+uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length);
 
 /* Walk page tables to translate virtual address to physical address */
 uintptr_t walk_page_tables(page_directory_t *directory, uintptr_t virtual_addr);

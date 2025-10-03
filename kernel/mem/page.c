@@ -19,6 +19,7 @@
 #include "printk.h"
 #include "stdlib.h"
 #include "string.h"
+#include <stdint.h>
 
 page_directory_t  kernel_page_dir;
 page_directory_t *current_directory = 0;
@@ -259,6 +260,29 @@ pat_config_t get_pat_config(void)
     }
     if (pos > 0) config.pat_str[pos - 1] = '\0';
     return config;
+}
+
+/* Walk page tables to find a free virtual range */
+uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length)
+{
+    if (!directory || length == 0) { return 0; }
+    uintptr_t check_ptr = start;
+    while (1) {
+        if (walk_page_tables(directory, check_ptr) != 0) { // not free
+            start += PAGE_SIZE;
+            check_ptr = start;
+        } else {                    // maybe free
+            size_t free_length = 0; // how many bytes are free
+            while (free_length < length) {
+                if (walk_page_tables(directory, check_ptr) != 0) break; // not free
+                free_length += PAGE_SIZE;
+                check_ptr += PAGE_SIZE;
+            }
+            if (free_length >= length) return start;
+            start += PAGE_SIZE;
+            check_ptr = start;
+        }
+    }
 }
 
 /* Walk page tables to translate virtual address to physical address */
