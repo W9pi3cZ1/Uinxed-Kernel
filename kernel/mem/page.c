@@ -263,7 +263,7 @@ pat_config_t get_pat_config(void)
 }
 
 /* Walk page tables to find a free virtual range */
-uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length)
+uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length) // NOLINT
 {
     if (!directory || length == 0) { return 0; }
     uintptr_t check_ptr = start;
@@ -290,13 +290,13 @@ uintptr_t walk_page_tables(page_directory_t *directory, uintptr_t virtual_addr)
 {
     if (!directory) { return 0; }
 
-    uint64_t flags_mask = 0xfff | PTE_NO_EXECUTE;
-    flags_mask          = ~flags_mask;
+    uint64_t flags_mask = ~(0xfff0000000000fff);
 
     uint64_t l4_index = (virtual_addr >> 39) & 0x1ff;
     uint64_t l3_index = (virtual_addr >> 30) & 0x1ff;
     uint64_t l2_index = (virtual_addr >> 21) & 0x1ff;
     uint64_t l1_index = (virtual_addr >> 12) & 0x1ff;
+    uint64_t offset   = virtual_addr & 0xfff;
 
     page_table_t *l4_table = directory->table;
     if (!l4_table->entries[l4_index].value || !(l4_table->entries[l4_index].value & PTE_PRESENT)) { return 0; }
@@ -318,7 +318,7 @@ uintptr_t walk_page_tables(page_directory_t *directory, uintptr_t virtual_addr)
     uint64_t      l1_phys  = l2_table->entries[l2_index].value & flags_mask;
     page_table_t *l1_table = (page_table_t *)phys_to_virt(l1_phys);
     if (!l1_table->entries[l1_index].value || !(l1_table->entries[l1_index].value & PTE_PRESENT)) { return 0; }
-    return ((l1_table->entries[l1_index].value & flags_mask)) | (virtual_addr & 0xfff);
+    return ((l1_table->entries[l1_index].value & flags_mask)) | offset;
 }
 
 /* Initialize memory page table */

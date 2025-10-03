@@ -131,7 +131,7 @@ void ap_init_tss(cpu_processor_t *cpu)
 
     cpu->gdt.entries[5] = (((low_base | mid_base) | limit) | access_byte);
     cpu->gdt.entries[6] = high_base;
-    cpu->tss->ist[0]    = ((uint64_t)cpu->tss_stack) + sizeof(tss_stack_t);
+    cpu->tss->ist[0]    = ALIGN_DOWN(((uint64_t)cpu->tss_stack) + sizeof(tss_stack_t), 16);
     __asm__ volatile("ltr %w[offset]" ::[offset] "rm"((uint16_t)0x28) : "memory");
 
     /* Set kernel stack */
@@ -149,7 +149,12 @@ void ap_init_gdt(cpu_processor_t *cpu)
     cpu->gdt.entries[3] = 0x00c0f20000000000; // User code segment
     cpu->gdt.entries[4] = 0x00a0fa0000000000; // User data segment
 
-    cpu->gdt.pointer = ((gdt_register_t) {.size = (uint16_t)(sizeof(gdt_entries_t) - 1), .ptr = (gdt_entries_t *)&cpu->gdt.entries});
+    gdt_entries_t *gdt_entries_addr = virt_any_to_phys((uintptr_t)&(cpu->gdt.entries));
+
+    cpu->gdt.pointer = ((gdt_register_t) {
+        .size = (uint16_t)(sizeof(gdt_entries_t) - 1),
+        .ptr  = (gdt_entries_t *)gdt_entries_addr,
+    });
 
     __asm__ volatile("lgdt %[ptr]; push %[cseg]; lea 1f(%%rip), %%rax; push %%rax; lretq;"
                      "1:"
