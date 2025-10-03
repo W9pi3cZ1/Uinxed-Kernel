@@ -10,6 +10,7 @@
  */
 
 #include "acpi.h"
+#include "alloc.h"
 #include "cmdline.h"
 #include "common.h"
 #include "cpuid.h"
@@ -30,6 +31,8 @@
 #include "serial.h"
 #include "smbios.h"
 #include "smp.h"
+#include "stdint.h"
+#include "string.h"
 #include "uinxed.h"
 #include "video.h"
 
@@ -48,6 +51,21 @@ void executable_entry(void)
                      :
                      : [msg] "m"(msg), [len] "r"(sizeof msg - 1)
                      : "rax", "rdi", "rsi", "rdx");
+}
+
+void malloc_check(void)
+{
+    char p[512];
+    for (int i = 0; i < 512; i++) p[i] = (char)i;
+    char *q = malloc(512);
+    memcpy(q, p, 512);
+    char *phys = virt_any_to_phys((uintptr_t)q);
+    if (memcmp(p, q, 512)) { panic("Memory allocation error."); }
+    printk("Memory allocated at %p (phys %p)\n", q, phys);
+    if (memcmp(q, phys, 512)) { panic("Virtual to physical address conversion error."); }
+    free(q);
+    plogk("Memory allocation test passed.\n");
+    return;
 }
 
 /* Kernel entry */
@@ -82,6 +100,7 @@ void kernel_entry(void)
     plogk("x86/PAT: Configuration [0-7]: %s\n", get_pat_config().pat_str);
     plogk("dmi: %s %s, BIOS %s %s\n", smbios_sys_manufacturer(), smbios_sys_product_name(), smbios_bios_version(), smbios_bios_release_date());
 
+    malloc_check();               // Memory allocation test
     init_gdt();                   // Initialize global descriptors
     init_idt();                   // Initialize interrupt descriptor
     isr_registe_handle();         // Register ISR interrupt processing

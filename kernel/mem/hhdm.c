@@ -13,6 +13,7 @@
 #include "cpuid.h"
 #include "limine.h"
 #include "page.h"
+#include "page_walker.h"
 #include "printk.h"
 #include "uinxed.h"
 

@@ -44,6 +44,12 @@ typedef struct {
         uint8_t types[8];
 } pat_config_t;
 
+/* Determine whether the page table entry maps a huge page */
+inline static int is_huge_page(page_table_entry_t *entry)
+{
+    return (((uint64_t)entry->value) & PTE_HUGE) != 0;
+}
+
 /* Clear all entries in a memory page table */
 void page_table_clear(page_table_t *table);
 
@@ -85,12 +91,6 @@ void page_map_range_to_random(page_directory_t *directory, uint64_t addr, uint64
 
 /* Get the PAT configuration */
 pat_config_t get_pat_config(void);
-
-/* Walk page tables to find a free virtual range */
-uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length);
-
-/* Walk page tables to translate virtual address to physical address */
-uintptr_t walk_page_tables(page_directory_t *directory, uintptr_t virtual_addr);
 
 /* Initialize memory page table */
 void page_init(void);
