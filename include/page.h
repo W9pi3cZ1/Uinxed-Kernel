@@ -50,6 +50,20 @@ inline static int is_huge_page(page_table_entry_t *entry)
     return (((uint64_t)entry->value) & PTE_HUGE) != 0;
 }
 
+/* Enable paging with a phys page directory address */
+static inline void enable_paging(uintptr_t page_directory_phys)
+{
+    __asm__ volatile("mov %0, %%cr3\n\t"
+                     "mov %%cr0, %%rax\n\t"
+                     "or $0x80000000, %%eax\n\t"
+                     "mov %%rax, %%cr0\n\t"
+                     "jmp 1f\n\t"
+                     "1:\n\t"
+                     :
+                     : "r"(page_directory_phys)
+                     : "eax", "memory");
+}
+
 /* Clear all entries in a memory page table */
 void page_table_clear(page_table_t *table);
 

@@ -32,9 +32,9 @@
 #include "smbios.h"
 #include "smp.h"
 #include "stdint.h"
-#include "string.h"
 #include "uinxed.h"
 #include "video.h"
+#include <stddef.h>
 
 /* Executable entry */
 void executable_entry(void)
@@ -55,14 +55,22 @@ void executable_entry(void)
 
 void malloc_check(void)
 {
-    char p[512];
-    for (int i = 0; i < 512; i++) p[i] = (char)i;
-    char *q = malloc(512);
-    memcpy(q, p, 512);
+    const size_t TEST_SIZE = frame_allocator.usable_frames * PAGE_SIZE / 8;
+    char        *q         = malloc(TEST_SIZE); // 50 MiB checksum
+    for (size_t i = 0; i < TEST_SIZE; i++) q[i] = (char)i;
     char *phys = virt_any_to_phys((uintptr_t)q);
-    if (memcmp(p, q, 512)) { panic("Memory allocation error."); }
-    printk("Memory allocated at %p (phys %p)\n", q, phys);
-    if (memcmp(q, phys, 512)) { panic("Virtual to physical address conversion error."); }
+    plogk("Memory allocated at %p (phys %p)\n", q, phys);
+    int diff = 0;
+    for (size_t i = 0; i < TEST_SIZE; i++) {
+        diff += q[i] - *phys;
+        if (q[i] != *phys) { printk("Memory allocation test failed at offset %llx: %02hhx != %02hhx\n", i, q[i], *phys); }
+        if ((uintptr_t)(phys + 1) & 0xfff) { // Still in the same page
+            phys++;
+        } else { // Next page
+            phys = virt_any_to_phys((uintptr_t)(q + i + 1));
+        }
+    }
+    if (diff) { panic("Virtual to physical address conversion error."); }
     free(q);
     plogk("Memory allocation test passed.\n");
     return;
@@ -100,7 +108,6 @@ void kernel_entry(void)
     plogk("x86/PAT: Configuration [0-7]: %s\n", get_pat_config().pat_str);
     plogk("dmi: %s %s, BIOS %s %s\n", smbios_sys_manufacturer(), smbios_sys_product_name(), smbios_bios_version(), smbios_bios_release_date());
 
-    malloc_check();               // Memory allocation test
     init_gdt();                   // Initialize global descriptors
     init_idt();                   // Initialize interrupt descriptor
     isr_registe_handle();         // Register ISR interrupt processing
@@ -114,6 +121,7 @@ void kernel_entry(void)
     init_serial();                // Initialize the serial port
     init_parallel();              // Initialize the parallel port
     init_ps2();                   // Initialize PS/2 controller
+    malloc_check();               // Memory allocation test
     enable_intr();
 
     panic("No operation.");

@@ -29,7 +29,7 @@ uint64_t heap_size  = 0;
 /* Initialize the memory heap */
 void init_heap(void)
 {
-    uint64_t extra_heap_frames    = frame_allocator.usable_frames / 16; // Use up to 1/16 of total memory for heap
+    uint64_t extra_heap_frames    = frame_allocator.usable_frames / 8; // Use up to 1/8 of total memory for heap
     uint64_t min_heap_frame_count = MIN_HEAP_SIZE / PAGE_SIZE;
     uint64_t heap_frame_count     = min_heap_frame_count + extra_heap_frames;
 
@@ -44,18 +44,16 @@ void init_heap(void)
     heap_start               = heap_virt_start;
     heap_size                = heap_frame_count * PAGE_SIZE;
 
-    /*
-        // These codes are disabled because it's slow...
-        // Fast check
-        uint64_t candidate   = heap_virt.val;
-        size_t   free_length = check_range_free_fast(get_kernel_pagedir(), candidate, heap_frame_count * PAGE_SIZE);
+    // // These codes are disabled because it's slow...
+    // // Fast check
+    // uint64_t candidate   = heap_virt.val;
+    // size_t   free_length = check_range_free_fast(get_kernel_pagedir(), candidate, heap_frame_count * PAGE_SIZE);
 
-        // Fallback to slow check if not enough space [may never happen:)]
-        if (free_length < heap_frame_count * PAGE_SIZE) {
-            candidate = walk_page_tables_find_free(get_kernel_pagedir(), candidate, heap_frame_count * PAGE_SIZE);
-            if (candidate == 0) { return; } // No space found
-        }
-    */
+    // // Fallback to slow check if not enough space [may never happen:)]
+    // if (free_length < heap_frame_count * PAGE_SIZE) {
+    //     candidate = walk_page_tables_find_free(get_kernel_pagedir(), candidate, heap_frame_count * PAGE_SIZE);
+    //     if (candidate == 0) { return; } // No space found
+    // }
 
     heap_start = heap_virt.val;
     page_map_range_to_random(get_kernel_pagedir(), heap_start, heap_size, KERNEL_PTE_FLAGS);

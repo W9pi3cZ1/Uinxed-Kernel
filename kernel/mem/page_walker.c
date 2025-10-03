@@ -48,6 +48,11 @@ void page_walk_init(page_walk_state_t *state, page_directory_t *directory, uintp
 /* Fast page table lookup helper */
 static inline uint8_t page_table_lookup(page_table_t *table, uint16_t index, page_table_t **next_table, uint64_t *entry_value)
 {
+    if (next_table && *next_table && entry_value) {
+        *entry_value = (uintptr_t)virt_to_phys((uintptr_t)*next_table);
+        return 1;
+    }
+
     if (!table || index >= 512) { return 0; }
 
     uint64_t entry = table->entries[index].value;
@@ -193,8 +198,9 @@ size_t check_range_free_fast(page_directory_t *directory, uintptr_t start, size_
     uintptr_t         current = ALIGN_UP(start, 1 << 21); // 2MB alignment
     size_t            checked = 0;
 
+    page_walk_init(&state, directory, current);
     while (checked < length) {
-        page_walk_init(&state, directory, current);
+        update_walk_state_for_next_page(&state, current);
         if (page_walk_execute(&state)) {
             break; // Page is mapped
         }

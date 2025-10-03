@@ -15,6 +15,7 @@
 #include "common.h"
 #include "debug.h"
 #include "eis.h"
+#include "frame.h"
 #include "gdt.h"
 #include "hhdm.h"
 #include "interrupt.h"
@@ -129,9 +130,9 @@ void ap_init_tss(cpu_processor_t *cpu)
     uint64_t access_byte = (((uint64_t)(0x89)) << 40);
     uint64_t limit       = (uint64_t)(sizeof(tss_t) - 1);
 
-    cpu->gdt.entries[5] = (((low_base | mid_base) | limit) | access_byte);
-    cpu->gdt.entries[6] = high_base;
-    cpu->tss->ist[0]    = ALIGN_DOWN(((uint64_t)cpu->tss_stack) + sizeof(tss_stack_t), 16);
+    cpu->gdt->entries[5] = (((low_base | mid_base) | limit) | access_byte);
+    cpu->gdt->entries[6] = high_base;
+    cpu->tss->ist[0]     = ALIGN_DOWN(((uint64_t)cpu->tss_stack) + sizeof(tss_stack_t), 16);
     __asm__ volatile("ltr %w[offset]" ::[offset] "rm"((uint16_t)0x28) : "memory");
 
     /* Set kernel stack */
@@ -143,15 +144,15 @@ void ap_init_tss(cpu_processor_t *cpu)
 /* Initialize the GDT for the AP */
 void ap_init_gdt(cpu_processor_t *cpu)
 {
-    cpu->gdt.entries[0] = 0x0000000000000000; // NULL descriptor
-    cpu->gdt.entries[1] = 0x00a09a0000000000; // Kernel code segment
-    cpu->gdt.entries[2] = 0x00c0920000000000; // Kernel data segment
-    cpu->gdt.entries[3] = 0x00c0f20000000000; // User code segment
-    cpu->gdt.entries[4] = 0x00a0fa0000000000; // User data segment
+    cpu->gdt->entries[0] = 0x0000000000000000; // NULL descriptor
+    cpu->gdt->entries[1] = 0x00a09a0000000000; // Kernel code segment
+    cpu->gdt->entries[2] = 0x00c0920000000000; // Kernel data segment
+    cpu->gdt->entries[3] = 0x00c0f20000000000; // User code segment
+    cpu->gdt->entries[4] = 0x00a0fa0000000000; // User data segment
 
-    gdt_entries_t *gdt_entries_addr = virt_any_to_phys((uintptr_t)&(cpu->gdt.entries));
+    gdt_entries_t *gdt_entries_addr = virt_any_to_phys((uintptr_t)&(cpu->gdt->entries));
 
-    cpu->gdt.pointer = ((gdt_register_t) {
+    cpu->gdt->pointer = ((gdt_register_t) {
         .size = (uint16_t)(sizeof(gdt_entries_t) - 1),
         .ptr  = (gdt_entries_t *)gdt_entries_addr,
     });
@@ -162,7 +163,7 @@ void ap_init_gdt(cpu_processor_t *cpu)
                      "mov %[dseg], %%fs;"
                      "mov %[dseg], %%gs;"
                      "mov %[dseg], %%es;"
-                     "mov %[dseg], %%ss;" ::[ptr] "m"(cpu->gdt.pointer),
+                     "mov %[dseg], %%ss;" ::[ptr] "m"(cpu->gdt->pointer),
                      [cseg] "rm"((uint64_t)0x8), [dseg] "rm"((uint64_t)0x10)
                      : "memory");
     ap_init_tss(cpu);
@@ -175,7 +176,13 @@ void ap_entry(struct limine_smp_info *info)
     init_sse();
     init_avx();
 
-    pointer_cast_t cast;
+    /* load page table */
+    page_directory_t *krnl_pagedir = get_kernel_pagedir();
+    pointer_cast_t    cast;
+    cast.ptr = krnl_pagedir->table;
+    cast.ptr = virt_to_phys(cast.val);
+    enable_paging(cast.val);
+
     cast.val             = info->extra_argument;
     cpu_processor_t *cpu = (cpu_processor_t *)cast.ptr;
 
@@ -224,15 +231,16 @@ void smp_init(void)
 
         /* Special handling for BSP */
         if (cpu->lapic_id == smp->bsp_lapic_id) {
-            cpus[i].gdt       = gdt0;
+            cpus[i].gdt       = &gdt0;
             cpus[i].tss_stack = &tss_stack;
             cpus[i].tss       = &tss0;
+
             pointer_cast_t cast;
             cast.ptr = cpus[i].kernel_stack;
             set_kernel_stack(ALIGN_DOWN((uint64_t)cast.val + sizeof(kernel_stack_t), 16));
             continue;
         } else {
-            /* Allocate TSS Stack for each CPU */
+            cpus[i].gdt       = (gdt_t *)malloc(sizeof(tss_t));
             cpus[i].tss_stack = malloc(sizeof(tss_stack_t));
             cpus[i].tss       = (tss_t *)malloc(sizeof(tss_t));
 
