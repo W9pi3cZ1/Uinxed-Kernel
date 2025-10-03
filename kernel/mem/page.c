@@ -17,9 +17,9 @@
 #include "hhdm.h"
 #include "interrupt.h"
 #include "printk.h"
+#include "stdint.h"
 #include "stdlib.h"
 #include "string.h"
-#include <stdint.h>
 
 page_directory_t  kernel_page_dir;
 page_directory_t *current_directory = 0;

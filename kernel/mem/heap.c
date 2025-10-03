@@ -32,7 +32,7 @@ void init_heap(void)
 
     pointer_cast_t heap_virt;
     heap_virt.val = ((uint64_t)1 << get_cpu_phys_bits()) + get_physical_memory_offset(); // End of HHDM for detect free space
-    heap_virt.val = ALIGN_UP(heap_virt.val, 16);
+    heap_virt.val = ALIGN_UP(heap_virt.val, 4096);
 
     uint64_t heap_virt_start = heap_virt.val;
     heap_start               = heap_virt_start;
