@@ -34,7 +34,6 @@
 #include "stdint.h"
 #include "uinxed.h"
 #include "video.h"
-#include <stddef.h>
 
 /* Executable entry */
 void executable_entry(void)
