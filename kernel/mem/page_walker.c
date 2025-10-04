@@ -15,7 +15,6 @@
 #include "string.h"
 
 // Constants for faster masking
-static const uint64_t PAGE_FLAGS_MASK   = ~(0xFFF0000000000FFFULL);
 static const uint64_t HUGE_PAGE_1G_MASK = ~((1ULL << 30) - 1);
 static const uint64_t HUGE_PAGE_2M_MASK = ~((1ULL << 21) - 1);
 
@@ -164,7 +163,7 @@ void update_walk_state_for_next_page(page_walk_state_t *state, uintptr_t next_vi
 }
 
 /* Check range of free pages using optimized state */
-size_t check_range_free_with_state(page_walk_state_t *state, uintptr_t start, size_t length)
+size_t check_range_free_with_state(page_walk_state_t *state, uintptr_t start, size_t length) // NOLINT
 {
     if (!state || length == 0) { return 0; }
 
@@ -190,7 +189,7 @@ size_t check_range_free_with_state(page_walk_state_t *state, uintptr_t start, si
 }
 
 /* Fast range free checker with large page */
-size_t check_range_free_fast(page_directory_t *directory, uintptr_t start, size_t length)
+size_t check_range_free_fast(page_directory_t *directory, uintptr_t start, size_t length) // NOLINT
 {
     if (!directory || length == 0) return 0;
 
@@ -212,7 +211,7 @@ size_t check_range_free_fast(page_directory_t *directory, uintptr_t start, size_
 }
 
 /* Optimized free region finder with boundary alignment */
-uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length)
+uintptr_t walk_page_tables_find_free(page_directory_t *directory, uintptr_t start, size_t length) // NOLINT
 {
     if (!directory || length == 0) { return 0; }
 

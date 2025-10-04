@@ -35,7 +35,7 @@ void init_heap(void)
 
     struct limine_kernel_address_response *krnl_addr_resp = kernel_address_request.response;
 
-    const uintptr_t HEAP_OFFSET = 256 * 1024 * 1024 + krnl_addr_resp->physical_base;
+    const uintptr_t HEAP_OFFSET = (uint64_t)(256 * 1024 * 1024) + krnl_addr_resp->physical_base;
     pointer_cast_t  heap_virt;
     heap_virt.val = ((uint64_t)1 << get_cpu_phys_bits()) + get_physical_memory_offset() + HEAP_OFFSET; // End of HHDM for detect free space
     heap_virt.val = ALIGN_UP(heap_virt.val, 4096);

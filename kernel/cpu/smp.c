@@ -240,7 +240,7 @@ void smp_init(void)
             set_kernel_stack(ALIGN_DOWN((uint64_t)cast.val + sizeof(kernel_stack_t), 16));
             continue;
         } else {
-            cpus[i].gdt       = (gdt_t *)malloc(sizeof(tss_t));
+            cpus[i].gdt       = (gdt_t *)malloc(sizeof(gdt_t));
             cpus[i].tss_stack = malloc(sizeof(tss_stack_t));
             cpus[i].tss       = (tss_t *)malloc(sizeof(tss_t));
 

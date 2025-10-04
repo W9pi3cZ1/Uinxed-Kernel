@@ -24,6 +24,8 @@
 #define PTE_NO_EXECUTE   (((uint64_t)0x1) << 63)
 #define KERNEL_PTE_FLAGS (PTE_PRESENT | PTE_WRITEABLE | PTE_NO_EXECUTE)
 
+#define PAGE_FLAGS_MASK (~(0xFFF0000000000FFFULL))
+
 #define PAGE_SIZE 0x1000
 
 typedef struct {
@@ -76,11 +78,11 @@ page_directory_t *get_kernel_pagedir(void);
 /* Returns the page directory of the current process */
 page_directory_t *get_current_directory(void);
 
-/* Iteratively copy memory page tables using an explicit stack */
-void copy_page_table_iterative(page_table_t *source_table, page_table_t *new_table, int level);
+/* Recursively copy memory page tables using an explicit stack */
+void copy_page_table_recursive(page_table_t *source_table, page_table_t *new_table, int level);
 
-/* Iteratively free memory page tables using an explicit stack */
-void free_page_table_iterative(page_table_t *table, int level);
+/* Recursively free memory page tables using an explicit stack */
+void free_page_table_recursive(page_table_t *table, int level);
 
 /* Clone a page directory */
 page_directory_t *clone_directory(page_directory_t *src);
